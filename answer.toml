@@ -1,0 +1,41 @@
+[global]
+keyboard = "en-us"
+country  = "us"
+fqdn     = "pve01.wgucc.net"
+mailto = "mail@no.invalid"
+timezone = "America/Los_Angeles"
+
+# Proxmox requires a password during install. We'll lock it immediately at first boot.
+# Create a throwaway hash with: mkpasswd --method=yescrypt
+root-password-hashed = "$y$j9T$i53YkJW3TvmUWGi/Y2n8O.$.FKLGAQHridjHeo/suwqKyoBHPbbUE8mFvfktrzUWd3"
+
+# Your SSH public keys go straight into /root/.ssh/authorized_keys
+root-ssh-keys = [
+  "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK9W3h9Siv1mMFH0X+M0wtD8Oi1/0HfgXrshq2G4T+EJ korin 202509"
+]
+
+
+[network]
+source = "from-answer" #use static details below
+cidr = "104.37.174.28/22"
+dns = "1.1.1.1,1.0.0.1"
+gateway = "104.37.172.1"
+filter.ADDRESS = "24:6e:96:3f:b6:ce"
+
+
+[disk-setup]
+filesystem = "ext4"
+filter-match = "all"
+filter.ID_VENDOR = "DELL"
+filter.ID_MODEL  = "PERC*"  # match PERC virtual disk
+# Optional extra narrowing if you know it:
+# filter.ID_WWN   = "naa.644a8420*"  # use the actual NAA if/when you have it
+
+# Option B: if you know the exact device, uncomment one of these:
+# disk-list = ["sda"]
+# filter.DEVLINKS = "*by-id/wwn-0x5000c500aabbccdd*"
+
+[first-boot]
+# Run the hardening script before network comes up so it's protected the moment it gets an IP
+source   = "from-http"
+ordering = "before-network"
