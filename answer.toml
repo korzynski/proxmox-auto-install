@@ -16,7 +16,7 @@ root-ssh-keys = [
 
 
 [network]
-source = "dhcp" #use DHCP to get network details
+source = "from-dhcp" #use DHCP to get network details
 # Option B: static network details (uncomment to use)
 #source = "from-answer" #use static details below
 #cidr = "104.37.174.28/22"
