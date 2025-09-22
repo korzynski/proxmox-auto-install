@@ -16,7 +16,9 @@ root-ssh-keys = [
 
 
 [network]
+# Option A: DHCP network details
 source = "from-dhcp" #use DHCP to get network details
+
 # Option B: static network details (uncomment to use)
 #source = "from-answer" #use static details below
 #cidr = "104.37.174.28/22"
@@ -31,14 +33,15 @@ lvm.swapsize = 0 # disable swap
 lvm.maxvz    = 0 # disable LVM for containers
 
 # Option A: select hardware RAID disk
-filter-match = "all" # all filters must match (default)
-filter.ID_VENDOR = "DELL" # match Dell hardware
-filter.ID_MODEL  = "PERC*"  # match PERC virtual disk model (assumes Dell hardware)
-filter.ID_TYPE   = "disk"   # match only disks (not e.g. CD-ROM)
+#filter-match = "all" # all filters must match (default)
+#filter.ID_VENDOR = "DELL" # match Dell hardware
+#filter.ID_MODEL  = "PERC*"  # match PERC virtual disk model (assumes Dell hardware)
+#filter.ID_TYPE   = "disk"   # match only disks (not e.g. CD-ROM)
 # Optional extra narrowing if you know it:
 # filter.ID_WWN   = "naa.644a8420*"  # use the actual NAA if/when you have it
 
-# disk-list = ["sda"]
+# Option B: select a specific disk by device name
+disk-list = ["sda"]
 # filter.DEVLINKS = "*by-id/wwn-0x5000c500aabbccdd*"
 
 [first-boot]
