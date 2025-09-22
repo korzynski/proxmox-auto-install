@@ -43,7 +43,7 @@ fi
 systemctl restart pveproxy || true
 echo "[hardening] GUI bound to localhost"
 
-# 3b) switch to no-subscription repo if not already done
+# 4) switch to no-subscription repo if not already done
 # (you can remove this if you have a subscription)
 export DEBIAN_FRONTEND=noninteractive
 sed -i 's|^deb https://enterprise.proxmox.com|# &|' /etc/apt/sources.list.d/pve-enterprise.list 2>/dev/null || true
@@ -51,7 +51,7 @@ cat >/etc/apt/sources.list.d/pve-no-subscription.list <<'EOF'
 deb http://download.proxmox.com/debian/pve trixie pve-no-subscription
 EOF
 
-# 4) nftables allowlist firewall for 22 and 8006
+# 5) nftables allowlist firewall for 22 and 8006
 apt-get update
 apt-get -y install nftables fail2ban
 
@@ -95,9 +95,7 @@ systemctl enable nftables
 systemctl restart nftables || true
 echo "[hardening] nftables allowlist active"
 
-# 5) Fail2ban (uses nftables)
-export DEBIAN_FRONTEND=noninteractive
-
+# 6) Fail2ban (uses nftables)
 # Global defaults for nftables + sane timings
 cat >/etc/fail2ban/jail.local <<'JEOF'
 [DEFAULT]
