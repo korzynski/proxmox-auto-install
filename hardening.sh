@@ -1,5 +1,6 @@
 #!/bin/bash
-set -euo pipefail
+exec > >(tee -a /var/log/first-boot-hardening.log) 2>&1
+set -euxo pipefail
 
 # ========= customize these =========
 ALLOWED_V4="82.140.161.179/32, 10.55.55.0/24"                  # authorized IPs
@@ -42,9 +43,15 @@ fi
 systemctl restart pveproxy || true
 echo "[hardening] GUI bound to localhost"
 
+# 3b) switch to no-subscription repo if not already done
+# (you can remove this if you have a subscription)
+export DEBIAN_FRONTEND=noninteractive
+sed -i 's|^deb https://enterprise.proxmox.com|# &|' /etc/apt/sources.list.d/pve-enterprise.list 2>/dev/null || true
+cat >/etc/apt/sources.list.d/pve-no-subscription.list <<'EOF'
+deb http://download.proxmox.com/debian/pve trixie pve-no-subscription
+EOF
 
 # 4) nftables allowlist firewall for 22 and 8006
-export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get -y install nftables fail2ban
 
@@ -133,3 +140,4 @@ systemctl enable --now fail2ban
 echo "[hardening] fail2ban enabled"
 
 echo "[hardening] done"
+touch /var/lib/proxmox-first-boot.d/network-online-hardening.ok
