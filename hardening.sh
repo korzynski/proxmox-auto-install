@@ -37,29 +37,29 @@ echo "[hardening] sshd hardened"
 # 3) bind Proxmox GUI to localhost (reliable on PVE 9+ via systemd override)
 mkdir -p /etc/default
 cat >/etc/default/pveproxy <<'EOF'
-LISTEN_IPS="127.0.0.1"
+LISTEN_IP="127.0.0.1"
 EOF
 systemctl restart pveproxy || true
 echo "[hardening] GUI bound to localhost (systemd override)"
 
 # 4) switch to no-subscription repo if not already done
-#    - For *.list (classic): comment out lines
-#    - For *.sources (deb822): set 'Enabled: no'
-shopt -s nullglob
-for f in /etc/apt/sources.list.d/*enterprise* /etc/apt/sources.list.d/*ceph*; do
-  case "$f" in
-    *.list)
-      sed -i 's|^deb https://enterprise.proxmox.com|# &|' "$f" || true
-      ;;
-    *.sources)
-      # flip Enabled: yes -> no (add if missing)
-      if grep -q '^Enabled:' "$f"; then
-        sed -i 's/^Enabled:.*/Enabled: no/' "$f"
-      else
-        printf '\nEnabled: no\n' >> "$f"
-      fi
-      ;;
-  esac
+# --- Safe repo switch (handles .list and .sources) 
+
+# Quarantine enterprise/Ceph entries regardless of naming/format
+mkdir -p /etc/apt/sources.list.d/disabled
+for f in /etc/apt/sources.list.d/*; do
+  # Skip non-files
+  [ -f "$f" ] || continue
+  if grep -qi 'enterprise\.proxmox\.com' "$f"; then
+    mv -f "$f" /etc/apt/sources.list.d/disabled/
+    continue
+  fi
+  if echo "$f" | grep -qi 'ceph'; then
+    # If it references enterprise, quarantine as well
+    if grep -qi 'enterprise\.proxmox\.com' "$f"; then
+      mv -f "$f" /etc/apt/sources.list.d/disabled/
+    fi
+  fi
 done
 
 # Enable no-subscription PVE 9 repo (Debian 13 "trixie")
@@ -67,18 +67,9 @@ cat >/etc/apt/sources.list.d/pve-no-subscription.list <<'EOF'
 deb http://download.proxmox.com/debian/pve trixie pve-no-subscription
 EOF
 
-# Optional: Ceph no-subscription (only if you actually use Ceph)
-# cat >/etc/apt/sources.list.d/ceph.list <<'EOF'
-# deb http://download.proxmox.com/debian/ceph-squid trixie no-subscription
-# EOF
+echo "[hardening] switched to no-subscription repo"
 
-# 5) install nftables + fail2ban
-# Be resilient to transient mirror hiccups
-export DEBIAN_FRONTEND=noninteractive
-apt-get -o Acquire::Retries=3 update
-apt-get update
-apt-get -y install nftables fail2ban
-
+# 5) nftables + fail2ban setup
 # nftables allowlist
 cat >/etc/nftables.conf <<EOF
 flush ruleset
@@ -115,10 +106,6 @@ table inet filter {
   }
 }
 EOF
-
-systemctl enable nftables
-systemctl restart nftables || true
-echo "[hardening] nftables allowlist active"
 
 # Global defaults for nftables + sane timings
 cat >/etc/fail2ban/jail.local <<'JEOF'
@@ -158,8 +145,21 @@ failregex = ^<HOST> - - \[.*\] "POST /api2/json/access/ticket HTTP/1\.[01]" 401
 ignoreregex =
 FEOF
 
-systemctl enable --now fail2ban
-echo "[hardening] fail2ban enabled"
+# 6) install nftables + fail2ban
+# Be resilient to transient mirror hiccups
+export DEBIAN_FRONTEND=noninteractive
+apt-get clean
+apt-get -o Acquire::Retries=3 update
+apt-get -y install nftables fail2ban
+
+# Enable and start services
+systemctl enable --now nftables fail2ban
+
+# Test nftables config and activate
+nft -c -f /etc/nftables.conf && systemctl restart nftables
+nft list ruleset | head -n 60
+fail2ban-client status sshd
+echo "[hardening] nftables + fail2ban installed and running"
 
 echo "[hardening] done"
 touch /var/lib/proxmox-first-boot.d/network-online-hardening.ok
