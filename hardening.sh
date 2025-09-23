@@ -129,11 +129,12 @@ apply_rules() {
   nft list ruleset > "$TMP"
   nft -c -f "$TMP"      # parse-check
   nft -f "$TMP"         # apply
-  nft -c -f /etc/nftables.conf && systemctl reload nftables
 }
 
 build_rules
 apply_rules
+# Save and enable on boot
+nft list ruleset > /etc/nftables.conf
 
 # build fail2ban config
 mkdir -p /etc/fail2ban
