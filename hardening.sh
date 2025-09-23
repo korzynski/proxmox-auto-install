@@ -108,6 +108,7 @@ table inet filter {
 EOF
 
 # Global defaults for nftables + sane timings
+mkdir -p /etc/fail2ban
 cat >/etc/fail2ban/jail.local <<'JEOF'
 [DEFAULT]
 banaction = nftables-multiport
@@ -152,11 +153,10 @@ apt-get clean
 apt-get -o Acquire::Retries=3 update
 apt-get -y install nftables fail2ban
 
-# Enable and start services
+ # Enable and start services
+nft -c -f /etc/nftables.conf 
 systemctl enable --now nftables fail2ban
 
-# Test nftables config and activate
-nft -c -f /etc/nftables.conf && systemctl restart nftables
 nft list ruleset | head -n 60
 fail2ban-client status sshd
 echo "[hardening] nftables + fail2ban installed and running"
