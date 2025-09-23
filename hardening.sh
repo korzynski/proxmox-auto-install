@@ -183,4 +183,4 @@ fail2ban-client status sshd
 echo "[hardening] nftables + fail2ban installed and running"
 
 echo "[hardening] done"
-touch /var/lib/proxmox-first-boot.d/network-online-hardening.ok
+touch /var/lib/proxmox-first-boot/network-online-hardening.ok
