@@ -70,44 +70,72 @@ EOF
 echo "[hardening] switched to no-subscription repo"
 
 # 5) nftables + fail2ban setup
-# nftables allowlist
-cat >/etc/nftables.conf <<EOF
+
+# install and enable nftables + fail2ban
+export DEBIAN_FRONTEND=noninteractive
+apt-get clean
+apt-get -o Acquire::Retries=3 update
+apt-get -y install nftables fail2ban
+
+systemctl enable --now nftables fail2ban
+
+# Build nftables ruleset
+build_rules() {
+  nft -j list ruleset >/dev/null 2>&1 || true
+  nft -f - <<'EOF'
 flush ruleset
-table inet filter {
-  sets {
-    allowed4 { type ipv4_addr; flags interval; elements = { $ALLOWED_V4 } }
-    allowed6 { type ipv6_addr; flags interval; elements = { $ALLOWED_V6 } }
-  }
-  chains {
-    input {
-      type filter hook input priority 0; policy drop;
+add table inet filter
+add set inet filter allowed4 { type ipv4_addr; flags interval; }
+add set inet filter allowed6 { type ipv6_addr; flags interval; }
 
-      # basic hygiene
-      iif lo accept
-      ct state established,related accept
+add chain inet filter input   { type filter hook input   priority 0; policy drop; }
+add chain inet filter forward { type filter hook forward priority 0; policy drop; }
+add chain inet filter output  { type filter hook output  priority 0; policy accept; }
 
-      # ICMP is useful for troubleshooting; trim if you prefer stricter
-      ip protocol icmp icmp type { echo-request, echo-reply } ip saddr @allowed4 accept
-      ip6 nexthdr icmpv6 icmpv6 type { echo-request, echo-reply } ip6 saddr @allowed6 accept
-
-      # SSH 22
-      tcp dport 22 ip saddr @allowed4 accept
-      tcp dport 22 ip6 saddr @allowed6 accept
-
-      # Proxmox GUI 8006
-      tcp dport 8006 ip saddr @allowed4 accept
-      tcp dport 8006 ip6 saddr @allowed6 accept
-
-      # everything else drops by default
-      drop
-    }
-    forward { type filter hook forward priority 0; policy drop; }
-    output  { type filter hook output  priority 0; policy accept; }
-  }
-}
+# hygiene
+add rule inet filter input iifname "lo" accept
+add rule inet filter input ct state established,related accept
 EOF
 
-# Global defaults for nftables + sane timings
+  # Populate sets
+  if [[ -n "$ALLOWED_V4" ]]; then
+    NFTV4=$(printf '%s\n' "$ALLOWED_V4" | tr ',' '\n' | awk '{$1=$1};1' | paste -sd, -)
+    nft add element inet filter allowed4 "{ ${NFTV4} }"
+  fi
+
+  if [[ -n "$ALLOWED_V6" ]]; then
+    NFTV6=$(printf '%s\n' "$ALLOWED_V6" | tr ',' '\n' | awk '{$1=$1};1' | paste -sd, -)
+    nft add element inet filter allowed6 "{ ${NFTV6} }"
+  fi
+
+  # ICMP rules (only add v6 if we actually have allowed6 members)
+  nft add rule inet filter input ip protocol icmp icmp type { echo-request, echo-reply } ip saddr @allowed4 accept
+  if [[ -n "$ALLOWED_V6" ]]; then
+    nft add rule inet filter input ip6 nexthdr icmpv6 icmpv6 type { echo-request, echo-reply } ip6 saddr @allowed6 accept
+  fi
+
+  # SSH and GUI
+  nft add rule inet filter input tcp dport 22    ip saddr @allowed4 accept
+  nft add rule inet filter input tcp dport 8006  ip saddr @allowed4 accept
+  if [[ -n "$ALLOWED_V6" ]]; then
+    nft add rule inet filter input tcp dport 22    ip6 saddr @allowed6 accept
+    nft add rule inet filter input tcp dport 8006  ip6 saddr @allowed6 accept
+  fi
+}
+
+# Validate by exporting and re-parsing (dry run)
+apply_rules() {
+  TMP=/tmp/nft-rules.$$; trap 'rm -f "$TMP"' EXIT
+  nft list ruleset > "$TMP"
+  nft -c -f "$TMP"      # parse-check
+  nft -f "$TMP"         # apply
+  nft -c -f /etc/nftables.conf && systemctl reload nftables
+}
+
+build_rules
+apply_rules
+
+# build fail2ban config
 mkdir -p /etc/fail2ban
 cat >/etc/fail2ban/jail.local <<'JEOF'
 [DEFAULT]
@@ -147,16 +175,7 @@ failregex = ^<HOST> - - \[.*\] "POST /api2/json/access/ticket HTTP/1\.[01]" 401
 ignoreregex =
 FEOF
 
-# 6) install nftables + fail2ban
-# Be resilient to transient mirror hiccups
-export DEBIAN_FRONTEND=noninteractive
-apt-get clean
-apt-get -o Acquire::Retries=3 update
-apt-get -y install nftables fail2ban
-
- # Enable and start services
-nft -c -f /etc/nftables.conf 
-systemctl enable --now nftables fail2ban
+fail2ban-client reload
 
 nft list ruleset | head -n 60
 fail2ban-client status sshd
