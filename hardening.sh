@@ -140,6 +140,7 @@ bantime  = 2h
 JEOF
 
 # Optional pveproxy filter (only if you enable the jail above)
+mkdir -p /etc/fail2ban/filter.d
 cat >/etc/fail2ban/filter.d/pveproxy.conf <<'FEOF'
 [Definition]
 failregex = ^<HOST> - - \[.*\] "POST /api2/json/access/ticket HTTP/1\.[01]" 401
