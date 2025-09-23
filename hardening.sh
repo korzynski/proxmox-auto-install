@@ -34,27 +34,45 @@ fi
 systemctl restart ssh || systemctl restart sshd || true
 echo "[hardening] sshd hardened"
 
-# 3) bind Proxmox GUI to localhost
-if grep -q '^LISTEN_IPS' /etc/default/pveproxy; then
-sed -i 's/^LISTEN_IPS=.*/LISTEN_IPS=127.0.0.1/' /etc/default/pveproxy
-else
-echo 'LISTEN_IPS=127.0.0.1' >> /etc/default/pveproxy
-fi
+# 3) bind Proxmox GUI to localhost (reliable on PVE 9+ via systemd override)
+mkdir -p /etc/systemd/system/pveproxy.service.d
+cat >/etc/systemd/system/pveproxy.service.d/override.conf <<'EOF'
+[Service]
+ExecStart=
+ExecStart=/usr/bin/pveproxy --bind 127.0.0.1
+EOF
+systemctl daemon-reexec
 systemctl restart pveproxy || true
-echo "[hardening] GUI bound to localhost"
+echo "[hardening] GUI bound to localhost (systemd override)"
 
 # 4) switch to no-subscription repo if not already done
 # (you can remove this if you have a subscription)
-export DEBIAN_FRONTEND=noninteractive
-sed -i 's|^deb https://enterprise.proxmox.com|# &|' /etc/apt/sources.list.d/pve-enterprise.list 2>/dev/null || true
+# Disable enterprise repos (both PVE and Ceph), if present
+sed -i 's|^deb https://enterprise.proxmox.com|# &|' \
+  /etc/apt/sources.list.d/pve-enterprise.list 2>/dev/null || true
+sed -i 's|^deb https://enterprise.proxmox.com|# &|' \
+  /etc/apt/sources.list.d/ceph.list 2>/dev/null || true
+# (Ceph file name may differ; the sed lines will be no-ops if the files don’t exist.)
+
+# Enable no-subscription PVE 9 repo (Debian 13 "trixie")
 cat >/etc/apt/sources.list.d/pve-no-subscription.list <<'EOF'
 deb http://download.proxmox.com/debian/pve trixie pve-no-subscription
 EOF
 
-# 5) nftables allowlist firewall for 22 and 8006
+# Optional: Ceph no-subscription (only if you actually use Ceph)
+# cat >/etc/apt/sources.list.d/ceph.list <<'EOF'
+# deb http://download.proxmox.com/debian/ceph-squid trixie no-subscription
+# EOF
+
+
+# 5) install nftables + fail2ban
+# Be resilient to transient mirror hiccups
+export DEBIAN_FRONTEND=noninteractive
+apt-get -o Acquire::Retries=3 update
 apt-get update
 apt-get -y install nftables fail2ban
 
+# nftables allowlist
 cat >/etc/nftables.conf <<EOF
 flush ruleset
 table inet filter {
@@ -71,8 +89,8 @@ table inet filter {
       ct state established,related accept
 
       # ICMP is useful for troubleshooting; trim if you prefer stricter
-      ip protocol icmp type { echo-request, echo-reply } ip saddr @allowed4 accept
-      ip6 nexthdr icmpv6 type { echo-request, echo-reply } ip6 saddr @allowed6 accept
+      ip protocol icmp icmp type { echo-request, echo-reply } ip saddr @allowed4 accept
+      ip6 nexthdr icmpv6 icmpv6 type { echo-request, echo-reply } ip6 saddr @allowed6 accept
 
       # SSH 22
       tcp dport 22 ip saddr @allowed4 accept
@@ -95,7 +113,6 @@ systemctl enable nftables
 systemctl restart nftables || true
 echo "[hardening] nftables allowlist active"
 
-# 6) Fail2ban (uses nftables)
 # Global defaults for nftables + sane timings
 cat >/etc/fail2ban/jail.local <<'JEOF'
 [DEFAULT]
