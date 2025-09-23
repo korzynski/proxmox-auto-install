@@ -35,24 +35,32 @@ systemctl restart ssh || systemctl restart sshd || true
 echo "[hardening] sshd hardened"
 
 # 3) bind Proxmox GUI to localhost (reliable on PVE 9+ via systemd override)
-mkdir -p /etc/systemd/system/pveproxy.service.d
-cat >/etc/systemd/system/pveproxy.service.d/override.conf <<'EOF'
-[Service]
-ExecStart=
-ExecStart=/usr/bin/pveproxy --bind 127.0.0.1
+mkdir -p /etc/default
+cat >/etc/default/pveproxy <<'EOF'
+LISTEN_IPS="127.0.0.1"
 EOF
-systemctl daemon-reexec
 systemctl restart pveproxy || true
 echo "[hardening] GUI bound to localhost (systemd override)"
 
 # 4) switch to no-subscription repo if not already done
-# (you can remove this if you have a subscription)
-# Disable enterprise repos (both PVE and Ceph), if present
-sed -i 's|^deb https://enterprise.proxmox.com|# &|' \
-  /etc/apt/sources.list.d/pve-enterprise.list 2>/dev/null || true
-sed -i 's|^deb https://enterprise.proxmox.com|# &|' \
-  /etc/apt/sources.list.d/ceph.list 2>/dev/null || true
-# (Ceph file name may differ; the sed lines will be no-ops if the files don’t exist.)
+#    - For *.list (classic): comment out lines
+#    - For *.sources (deb822): set 'Enabled: no'
+shopt -s nullglob
+for f in /etc/apt/sources.list.d/*enterprise* /etc/apt/sources.list.d/*ceph*; do
+  case "$f" in
+    *.list)
+      sed -i 's|^deb https://enterprise.proxmox.com|# &|' "$f" || true
+      ;;
+    *.sources)
+      # flip Enabled: yes -> no (add if missing)
+      if grep -q '^Enabled:' "$f"; then
+        sed -i 's/^Enabled:.*/Enabled: no/' "$f"
+      else
+        printf '\nEnabled: no\n' >> "$f"
+      fi
+      ;;
+  esac
+done
 
 # Enable no-subscription PVE 9 repo (Debian 13 "trixie")
 cat >/etc/apt/sources.list.d/pve-no-subscription.list <<'EOF'
@@ -63,7 +71,6 @@ EOF
 # cat >/etc/apt/sources.list.d/ceph.list <<'EOF'
 # deb http://download.proxmox.com/debian/ceph-squid trixie no-subscription
 # EOF
-
 
 # 5) install nftables + fail2ban
 # Be resilient to transient mirror hiccups
