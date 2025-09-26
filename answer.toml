@@ -41,4 +41,3 @@ lvm.maxroot  = 96                  # GiB for /
 source   = "from-url"
 ordering = "network-online" # wait for network to be online to allow package installs
 url = "https://raw.githubusercontent.com/korzynski/proxmox-auto-install/main/hardening.sh"
-cert-fingerprint = "7D:11:22:EA:96:98:52:34:1E:8D:D9:2B:CC:0C:7E:CC:00:96:30:D1:4D:A7:34:D7:CA:42:D5:B5:4A:2B:20:97"
