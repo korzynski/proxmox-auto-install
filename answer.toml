@@ -17,32 +17,24 @@ root-ssh-keys = [
 
 [network]
 # Option A: DHCP network details
-source = "from-dhcp" #use DHCP to get network details
+#source = "from-dhcp" #use DHCP to get network details
 
 # Option B: static network details (uncomment to use)
-#source = "from-answer" #use static details below
-#cidr = "104.37.174.28/22"
-#dns = "1.1.1.1"
-#gateway = "104.37.172.1"
-#filter.ADDRESS = "24:6e:96:3f:b6:ce"
-
+source = "from-answer" #use static details
+cidr = "104.37.174.28/22"
+dns = "1.1.1.1"
+gateway = "104.37.172.1"
+filter.ID_NET_NAME = "eno1np0" # Dell EMC R750xa onboard NIC 1
 
 [disk-setup]
 filesystem = "ext4"
-lvm.swapsize = 0 # disable swap
-lvm.maxvz    = 0 # disable LVM for containers
+filter-match = "all"
+filter.ID_MODEL  = "PERC*" # Dell PERC H730 mini virtual disk
+filter.ID_WWN_WITH_EXTENSION="0x644a84202f71f400306703170d0bb434" # Persists across reboots and disk swaps, but will change if array is rebuilt
 
-# Option A: select hardware RAID disk
-#filter-match = "all" # all filters must match (default)
-#filter.ID_VENDOR = "DELL" # match Dell hardware
-#filter.ID_MODEL  = "PERC*"  # match PERC virtual disk model (assumes Dell hardware)
-#filter.ID_TYPE   = "disk"   # match only disks (not e.g. CD-ROM)
-# Optional extra narrowing if you know it:
-# filter.ID_WWN   = "naa.644a8420*"  # use the actual NAA if/when you have it
-
-# Option B: select a specific disk by device name
-disk-list = ["sda"]
-# filter.DEVLINKS = "*by-id/wwn-0x5000c500aabbccdd*"
+# LVM sizing 
+lvm.swapsize = 8                   # GiB; docs say default is RAM clamped 4–8 GB, set explicitly
+lvm.maxroot  = 96                  # GiB for /
 
 [first-boot]
 # Run the hardening script immediately once network comes up so it's protected the moment it gets an IP

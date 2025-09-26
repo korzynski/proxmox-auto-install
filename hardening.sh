@@ -3,7 +3,7 @@ exec > >(tee -a /var/log/first-boot-hardening.log) 2>&1
 set -euxo pipefail
 
 # ========= customize these =========
-ALLOWED_V4="82.140.161.179/32, 10.55.55.0/24"                  # authorized IPs
+ALLOWED_V4="82.140.161.179/32"                  # authorized IPs
 ALLOWED_V6=""                                   # or e.g. "2001:db8::123/128"
 # ===================================
 
