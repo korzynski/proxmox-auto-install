@@ -21,7 +21,7 @@ root-ssh-keys = [
 
 # Option B: static network details (uncomment to use)
 source = "from-answer" #use static details
-cidr = "104.37.174.28/22"
+cidr = "104.37.174.28/30"
 dns = "1.1.1.1"
 gateway = "104.37.172.1"
 filter.ID_NET_NAME = "eno1np0" # Dell EMC R750xa onboard NIC 1
